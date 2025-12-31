@@ -1,94 +1,115 @@
 from collections import defaultdict
 
 # Recipes: product -> raw material requirements
-RECIPES = {
+PRODUCT_RECIPES = {
     # Ammo
     "Light Ammo": {"Lead": 1},
     "Medium Ammo": {"Lead": 1, "Steel": 1},
     "Heavy Ammo": {"Lead": 1},
-
     # Food
     "Bread": {"Grain": 1},
     "Steak": {"Livestock": 1},
     "Cooked Fish": {"Fish": 1},
-
     # Boost
     "Pill": {"Mysterious Plant": 1},
-
     # Money / Infrastructure
     "Steel": {"Iron": 1},
     "Concrete": {"Limestone": 1},
 }
 
 # Priority orders
-FOOD_PRIORITY = ["Bread", "Steak", "Cooked Fish"]
-AMMO_PRIORITY = ["Heavy Ammo", "Medium Ammo", "Light Ammo"]
-MONEY_PRIORITY = ["Steel", "Concrete"]
+FOOD_PRIORITY_PRODUCTS = ["Bread", "Steak", "Cooked Fish"]
+AMMO_PRIORITY_PRODUCTS = ["Heavy Ammo", "Medium Ammo", "Light Ammo"]
+MONEY_PRIORITY_PRODUCTS = ["Steel", "Concrete"]
 
-def count_needed(plan, product):
-    """Count companies needed for product + missing raw materials."""
+
+def count_required_companies(plan, product):
+    """Count companies needed to ADD ONE MORE of product + its missing raw materials."""
     needed = 1  # the product itself
-    for req in RECIPES.get(product, {}):
-        if plan[req] == 0:
-            needed += 1
+    for ingredient, amount in PRODUCT_RECIPES.get(product, {}).items():
+        if plan[ingredient] == 0:
+            needed += amount
     return needed
 
+
 def add_product(plan, product):
-    """Add product and its missing raw materials to plan."""
+    """Add ONE unit of product and its missing raw materials to plan."""
     plan[product] += 1
-    for req in RECIPES.get(product, {}):
+    for req, amount in PRODUCT_RECIPES.get(product, {}).items():
         if plan[req] == 0:
-            plan[req] += 1
+            plan[req] += amount
+
+
+def add_product_with_materials(plan, product):
+    """Add ONE unit of product AND ONE unit of each required raw material."""
+    plan[product] += 1
+    for req, amount in PRODUCT_RECIPES.get(product, {}).items():
+        plan[req] += amount
+
 
 # ---------------- DamageDealer ----------------
 def optimize_damage(total_companies):
     plan = defaultdict(int)
-    remaining = total_companies
+    remaining_companies = total_companies
 
     # 1. Food first
-    for food in FOOD_PRIORITY:
-        needed_food = count_needed(plan, food)
-        if needed_food <= remaining:
+    for food in FOOD_PRIORITY_PRODUCTS:
+        required_food_companies = count_required_companies(plan, food)
+        if required_food_companies <= remaining_companies:
             add_product(plan, food)
-            remaining -= needed_food
+            remaining_companies -= required_food_companies
             break  # only one food
 
     # 2. Ammo next
-    for ammo in AMMO_PRIORITY:
-        needed_ammo = count_needed(plan, ammo)
-        if needed_ammo <= remaining:
+    for ammo in AMMO_PRIORITY_PRODUCTS:
+        required_ammo_companies = count_required_companies(plan, ammo)
+        if required_ammo_companies <= remaining_companies:
             add_product(plan, ammo)
-            remaining -= needed_ammo
+            remaining_companies -= required_ammo_companies
             break  # only one ammo
 
     # 3. Boost
-    needed_boost = count_needed(plan, "Pill")
-    if needed_boost <= remaining:
+    needed_boost_companies = count_required_companies(plan, "Pill")
+    if needed_boost_companies <= remaining_companies:
         add_product(plan, "Pill")
-        remaining -= needed_boost
+        remaining_companies -= needed_boost_companies
 
-    # 4. Money
-    for money in MONEY_PRIORITY:
-        needed_money = count_needed(plan, money)
-        if needed_money <= remaining:
-            add_product(plan, money)
-            remaining -= needed_money
-            break  # only one money
+    # 4. Money - keep adding until we run out of companies
+    while remaining_companies > 0:
+        added = False
+        for product in MONEY_PRIORITY_PRODUCTS:
+            # Cost is always 2: 1 for product + 1 for raw material
+            cost = 2
+            if cost <= remaining_companies:
+                add_product_with_materials(plan, product)
+                remaining_companies -= cost
+                added = True
+                break
+        if not added:
+            break
 
     return plan
+
 
 # ---------------- Eco ----------------
 def optimize_eco(total_companies):
     plan = defaultdict(int)
-    remaining = total_companies
+    remaining_companies = total_companies
 
-    for money in MONEY_PRIORITY:
-        needed_money = count_needed(plan, money)
-        if needed_money <= remaining:
-            add_product(plan, money)
-            remaining -= needed_money
+    product_index = 0
+    while remaining_companies > 0:
+        cost = 2
+        if cost <= remaining_companies:
+            product = MONEY_PRIORITY_PRODUCTS[product_index]
+            add_product_with_materials(plan, product)
+            remaining_companies -= cost
+            # Alternate between products
+            product_index = (product_index + 1) % len(MONEY_PRIORITY_PRODUCTS)
+        else:
+            break
 
     return plan
+
 
 # ---------------- Display ----------------
 def display(plan):
@@ -98,6 +119,7 @@ def display(plan):
         print(f"{item}: {count}")
         total += count
     print(f"\nTotal companies used: {total}\n")
+
 
 # ---------------- Main ----------------
 def main():
@@ -113,6 +135,7 @@ def main():
         return
 
     display(plan)
+
 
 if __name__ == "__main__":
     main()
